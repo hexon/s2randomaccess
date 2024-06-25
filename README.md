@@ -1,5 +1,7 @@
 # Random Access over an S2 compressed stream
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/hexon/s2randomaccess.svg)](https://pkg.go.dev/github.com/hexon/s2randomaccess)
+
 S2 is an extension of [Snappy](https://github.com/google/snappy). This package builds on top of th exellent [github.com/klauspost/compress/s2](https://pkg.go.dev/github.com/klauspost/compress/s2).
 
 This package is similar to [s2.ReadSeeker](https://pkg.go.dev/github.com/klauspost/compress/s2#ReadSeeker), but optimized for concurrent requests and caching decompression of blocks.
