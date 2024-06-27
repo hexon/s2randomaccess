@@ -26,7 +26,7 @@ func (d *decompressedBlock) deref() {
 	d.refcount--
 	if d.refcount == 0 {
 		delete(d.seeker.active, d.blockOffset)
-		globalLRU.Add(d.lruKey, d)
+		defer globalLRU.Add(d.lruKey, d)
 	}
 	d.seeker.mtx.Unlock()
 }
