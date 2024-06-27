@@ -5,6 +5,7 @@ import (
 	"sync"
 )
 
+// Allocator defines the methods a custom allocator needs to have.
 type Allocator interface {
 	Alloc(n int) []byte
 	Free([]byte)
@@ -19,6 +20,7 @@ func (defaultAllocator) Alloc(n int) []byte {
 func (defaultAllocator) Free(b []byte) {
 }
 
+// WithAllocator can be passed to New() to use an alternative allocator.
 func WithAllocator(a Allocator) Option {
 	return func(s *Seeker) error {
 		s.allocator = a
@@ -31,6 +33,7 @@ const (
 	SyncPoolAllocatorLargestBucket = 33
 )
 
+// SyncPoolAllocator is an Allocator that uses one `sync.Pool` for each n**2 for n in (SyncPoolAllocatorSkipBuckets, SyncPoolAllocatorLargestBucket].
 type SyncPoolAllocator struct {
 	Pools [SyncPoolAllocatorLargestBucket - SyncPoolAllocatorSkipBuckets]sync.Pool
 }

@@ -23,6 +23,12 @@ type Seeker struct {
 
 type Option func(*Seeker) error
 
+// New creates a new Seeker from a slice of compressed S2 (or Snappy) stream.
+// The given slice is never written to.
+// The index must be either:
+// 1. At the end of the stream
+// 2. Built during new (if WithAllowBuildIndex() is passed)
+// 3. Given with WithIndex()
 func New(data []byte, options ...Option) (*Seeker, error) {
 	ret := Seeker{
 		data:   data,
@@ -88,6 +94,10 @@ const (
 	chunkTypeUncompressedData = 0x01
 )
 
+// Get the uncompressed data at the given (uncompressed) offset.
+// Will return a slice with length $length and a deref function that should be called exactly once.
+// The returned slice is valid until a call to deref and should not be modified.
+// If an error is returned, no deref function will be returned.
 func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 	comprOff, uncomprOff, err := s.idx.Find(offset)
 	if err != nil {
