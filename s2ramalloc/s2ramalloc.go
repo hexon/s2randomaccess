@@ -1,3 +1,5 @@
+// Package s2ramalloc provides a `s2randomacess.Allocator` that uses calloc(3).
+// It requires cgo.
 package s2ramalloc
 
 // #include <malloc.h>
@@ -10,6 +12,7 @@ import (
 	"unsafe"
 )
 
+// Allocator is an allocator that uses calloc(3) and free(3).
 type Allocator struct{}
 
 func (Allocator) Alloc(n int) []byte {
