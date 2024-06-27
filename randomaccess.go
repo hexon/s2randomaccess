@@ -33,7 +33,7 @@ func New(data []byte, options ...Option) (*Seeker, error) {
 			return nil, err
 		}
 	}
-	if err := ret.idx.LoadStream(bytes.NewReader(data)); err != nil {
+	if err := ret.loadIndex(); err != nil {
 		if err != s2.ErrUnsupported {
 			return nil, err
 		}
