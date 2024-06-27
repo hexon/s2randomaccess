@@ -1,7 +1,7 @@
 package s2randomaccess
 
 import (
-	"math/bits"
+	"math"
 	"sync"
 )
 
@@ -27,7 +27,6 @@ func WithAllocator(a Allocator) Option {
 }
 
 const (
-	SyncPoolAllocatorMinSize       = (1 << (SyncPoolAllocatorSkipBuckets - 1)) + 1
 	SyncPoolAllocatorSkipBuckets   = 6
 	SyncPoolAllocatorLargestBucket = 33
 )
@@ -37,33 +36,29 @@ type SyncPoolAllocator struct {
 }
 
 func (a *SyncPoolAllocator) Alloc(n int) []byte {
-	if n < SyncPoolAllocatorMinSize {
-		// Too small for the overhead of using a pool.
+	class := int(math.Ceil(math.Log2(float64(n))))
+	if class < SyncPoolAllocatorSkipBuckets || class >= SyncPoolAllocatorLargestBucket {
+		// Too small/big for the predeclared classes.
 		return make([]byte, n)
 	}
-	class := bucketForSize(n)
-	if class >= SyncPoolAllocatorLargestBucket {
-		// Too big for the predeclared classes.
-		return make([]byte, n)
+	for {
+		ret := a.Pools[class-SyncPoolAllocatorSkipBuckets].Get()
+		if ret == nil {
+			return make([]byte, n, 1<<class)
+		}
+		b := ret.([]byte)
+		if n <= cap(b) {
+			return b[:n]
+		}
+		// Someone put a too-small buffer into this bucket. Drop it.
 	}
-	if ret := a.Pools[class-SyncPoolAllocatorSkipBuckets].Get(); ret != nil {
-		return ret.([]byte)[:n]
-	}
-	return make([]byte, n, 1<<class)
 }
 
 func (a *SyncPoolAllocator) Free(b []byte) {
-	if cap(b) < SyncPoolAllocatorMinSize {
-		return
-	}
-	class := bucketForSize(cap(b))
-	if class >= SyncPoolAllocatorLargestBucket {
-		// Too big for the predeclared classes.
+	class := int(math.Floor(math.Log2(float64(cap(b)))))
+	if class < SyncPoolAllocatorSkipBuckets || class >= SyncPoolAllocatorLargestBucket {
+		// Too small/big for the predeclared classes.
 		return
 	}
 	a.Pools[class-SyncPoolAllocatorSkipBuckets].Put(b)
-}
-
-func bucketForSize(n int) int {
-	return 64 - bits.LeadingZeros64(uint64(n)-1)
 }
