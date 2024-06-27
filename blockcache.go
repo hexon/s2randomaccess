@@ -43,7 +43,7 @@ func onEvicted(k lruKey, d *decompressedBlock) {
 }
 
 // getDecompressedBlock finds the S2 block
-func (s *Seeker) getDecompressedBlock(offset, length int64) ([]byte, func(), error) {
+func (s *Seeker) getDecompressedBlock(offset int64, length int) ([]byte, func(), error) {
 	em := easymutex.LockMutex(&s.mtx)
 	defer em.Unlock()
 	if db, ok := s.active[offset]; ok {
@@ -56,7 +56,7 @@ func (s *Seeker) getDecompressedBlock(offset, length int64) ([]byte, func(), err
 		return db.decompressed, db.deref, nil
 	}
 	em.Unlock()
-	buf := s.allocator.Alloc(int(length))
+	buf := s.allocator.Alloc(length)
 	decoded, err := s2.Decode(buf, s.data[offset:][:length])
 	if err != nil {
 		return nil, nil, err

@@ -115,7 +115,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 				skipUncompr -= int64(dLen)
 				break
 			}
-			block, deref, err := s.getDecompressedBlock(comprOff+headerSize+checksumSize, int64(len(chunk))-checksumSize)
+			block, deref, err := s.getDecompressedBlock(comprOff+headerSize+checksumSize, dLen)
 			if err != nil {
 				return nil, nil, err
 			}
