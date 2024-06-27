@@ -95,7 +95,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 	}
 	skipUncompr := offset - uncomprOff
 	var partial []byte
-	var partialDeref func()
+	partialDeref := noop
 	for comprOff < int64(len(s.data)) {
 		chunkHeader := s.data[comprOff:][:headerSize]
 		chunkType := chunkHeader[0]
@@ -109,6 +109,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 		case chunkTypeCompressedData:
 			dLen, err := s2.DecodedLen(chunk[checksumSize:])
 			if err != nil {
+				partialDeref()
 				return nil, nil, err
 			}
 			if skipUncompr >= int64(dLen) {
@@ -117,6 +118,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 			}
 			block, deref, err := s.getDecompressedBlock(comprOff+headerSize+checksumSize, dLen)
 			if err != nil {
+				partialDeref()
 				return nil, nil, err
 			}
 			plain = block[skipUncompr:]
@@ -132,6 +134,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 		default:
 			if chunkType <= 0x7f {
 				// Unknown reserved unskippable chunk
+				partialDeref()
 				return nil, nil, s2.ErrUnsupported
 			}
 		}
@@ -154,6 +157,7 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 		}
 		comprOff += headerSize + int64(chunkLen)
 	}
+	partialDeref()
 	return nil, nil, io.ErrUnexpectedEOF
 }
 
