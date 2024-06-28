@@ -40,9 +40,7 @@ func New(data []byte, options ...Option) (*Seeker, error) {
 		}
 	}
 	if err := ret.loadIndex(); err != nil {
-		if err != s2.ErrUnsupported {
-			return nil, err
-		}
+		return nil, err
 	}
 	return &ret, nil
 }
@@ -69,10 +67,12 @@ func (s *Seeker) loadIndex() error {
 		// Given through WithIndex.
 		return nil
 	}
-	if err := s.idx.LoadStream(bytes.NewReader(s.data)); err != nil {
-		if err != s2.ErrUnsupported {
-			return err
-		}
+	switch err := s.idx.LoadStream(bytes.NewReader(s.data)); err {
+	case nil:
+		return nil
+	default:
+		return err
+	case s2.ErrUnsupported:
 	}
 	if !s.allowBuildIndex {
 		return errors.New("s2randomaccess: didn't find index in data and WithAllowBuildIndex() is not enabled")
