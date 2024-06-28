@@ -158,6 +158,9 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 					s.allocator.Free(partial)
 				}
 			}
+			if len(plain) > int(length)-len(partial) {
+				plain = plain[:int(length)-len(partial)]
+			}
 			partial = append(partial, plain...)
 			plainDeref()
 			if len(partial) == int(length) {
