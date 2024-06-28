@@ -171,5 +171,19 @@ func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
 	return nil, nil, io.ErrUnexpectedEOF
 }
 
+// ReadAt reads uncompressed data from the compressed stream at the given (uncompressed) offset.
+// Currently reads where offset+len(dst) is past the end of the stream fail with 0, io.ErrUnexpectedEOF, but that might be changed in the future to give a partial result together with io.EOF.
+func (s *Seeker) ReadAt(dst []byte, offset int64) (int, error) {
+	buf, deref, err := s.Get(offset, int64(len(dst)))
+	if err != nil {
+		return 0, err
+	}
+	defer deref()
+	// TODO: We could optimize reads that span chunks by using dst as the buffer.
+	return copy(dst, buf), nil
+}
+
+var _ io.ReaderAt = &Seeker{}
+
 func noop() {
 }
