@@ -71,3 +71,9 @@ func (s *Seeker) getDecompressedBlock(offset int64, compressedLength, uncompress
 func SetGlobalLRUSize(n int) {
 	globalLRU.Resize(n)
 }
+
+// PurgeGlobalCache purges the global LRU cache that holds decompressed blocks.
+// It is safe to call this function at any time.
+func PurgeGlobalCache() {
+	globalLRU.Purge()
+}
