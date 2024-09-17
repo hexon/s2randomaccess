@@ -10,7 +10,7 @@ import (
 var globalLRU, _ = lru.NewWithEvict[lruKey, *decompressedBlock](100, onEvicted)
 
 type lruKey struct {
-	seeker      *Seeker
+	inner       *inner
 	blockOffset int64
 }
 
@@ -22,24 +22,43 @@ type decompressedBlock struct {
 
 // deref is called when a user of this library is done with the slice they got from Get().
 func (d *decompressedBlock) deref() {
-	d.seeker.mtx.Lock()
+	d.inner.mtx.Lock()
 	d.refcount--
 	if d.refcount == 0 {
-		delete(d.seeker.active, d.blockOffset)
-		defer globalLRU.Add(d.lruKey, d)
+		delete(d.inner.active, d.blockOffset)
+		if d.inner.dying {
+			d.free()
+		} else {
+			globalLRU.Add(d.lruKey, d)
+		}
 	}
-	d.seeker.mtx.Unlock()
+	d.inner.mtx.Unlock()
 }
 
 // onEvicted is called when a decompressedBlock is thrown out of the LRU cache.
 func onEvicted(k lruKey, d *decompressedBlock) {
-	d.seeker.mtx.Lock()
-	if d.refcount == 0 {
-		d.refcount = -666
-		d.seeker.allocator.Free(d.decompressed)
-		d.decompressed = nil
+	if d.inner.mtx.TryLock() {
+		onEvicted_locked(d)
+	} else {
+		// Someone has the lock, possibly this eviction was caused by an Add() holding this lock. Clean up asynchronously.
+		go func() {
+			d.inner.mtx.Lock()
+			onEvicted_locked(d)
+		}()
 	}
-	d.seeker.mtx.Unlock()
+}
+
+func onEvicted_locked(d *decompressedBlock) {
+	if d.refcount == 0 {
+		d.free()
+	}
+	d.inner.mtx.Unlock()
+}
+
+func (d *decompressedBlock) free() {
+	d.refcount = -666
+	d.inner.allocator.Free(d.decompressed)
+	d.decompressed = nil
 }
 
 // getDecompressedBlock finds the S2 block
@@ -50,7 +69,7 @@ func (s *Seeker) getDecompressedBlock(offset int64, compressedLength, uncompress
 		db.refcount++
 		return db.decompressed, db.deref, nil
 	}
-	k := lruKey{s, offset}
+	k := lruKey{s.inner, offset}
 	if db, ok := globalLRU.Get(k); ok && db.refcount >= 0 {
 		db.refcount++
 		return db.decompressed, db.deref, nil
@@ -76,4 +95,16 @@ func SetGlobalLRUSize(n int) {
 // It is safe to call this function at any time.
 func PurgeGlobalCache() {
 	globalLRU.Purge()
+}
+
+func (i *inner) removeFromGlobalCache() {
+	i.mtx.Lock()
+	i.dying = true
+	i.mtx.Unlock()
+	for _, d := range globalLRU.Values() {
+		if d.inner == i {
+			// Remove triggers onEvicted.
+			globalLRU.Remove(d.lruKey)
+		}
+	}
 }

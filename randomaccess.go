@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"runtime"
 	"sync"
 
 	"github.com/klauspost/compress/s2"
@@ -13,12 +14,27 @@ type Seeker struct {
 	data []byte
 	idx  s2.Index
 
-	mtx    sync.Mutex
-	active map[int64]*decompressedBlock
+	*inner
+	sentinel *sentinel
 
-	allocator       Allocator
 	indexGiven      bool
 	allowBuildIndex bool
+}
+
+// inner is the subset of fields of the Seeker that is needed from a cached entry in the blockcache.
+// It is separate from Seeker so the Seeker can be garbage collected even while some blocks are still in the cache.
+type inner struct {
+	allocator Allocator
+
+	mtx    sync.Mutex
+	active map[int64]*decompressedBlock
+	dying  bool
+}
+
+// sentinel has a finalizer to drop everything from this Seeker from the cache.
+// We could've also set the finalizer on *Seeker itself, but that would've kept the reference for s.data one cycle longer.
+type sentinel struct {
+	inner *inner
 }
 
 type Option func(*Seeker) error
@@ -30,19 +46,25 @@ type Option func(*Seeker) error
 // 2. Built during new (if WithAllowBuildIndex() is passed)
 // 3. Given with WithIndex()
 func New(data []byte, options ...Option) (*Seeker, error) {
-	ret := Seeker{
-		data:   data,
-		active: map[int64]*decompressedBlock{},
+	ret := &Seeker{
+		data: data,
+		inner: &inner{
+			active: map[int64]*decompressedBlock{},
+		},
 	}
 	for _, o := range options {
-		if err := o(&ret); err != nil {
+		if err := o(ret); err != nil {
 			return nil, err
 		}
 	}
 	if err := ret.loadIndex(); err != nil {
 		return nil, err
 	}
-	return &ret, nil
+	ret.sentinel = &sentinel{ret.inner}
+	runtime.SetFinalizer(ret.sentinel, func(s *sentinel) {
+		s.inner.removeFromGlobalCache()
+	})
+	return ret, nil
 }
 
 // WithIndex passes the index rather than having it loaded from the stream.
@@ -99,6 +121,7 @@ const (
 // The returned slice is valid until a call to deref and should not be modified.
 // If an error is returned, no deref function will be returned.
 func (s *Seeker) Get(offset, length int64) ([]byte, func(), error) {
+	defer runtime.KeepAlive(s)
 	comprOff, uncomprOff, err := s.idx.Find(offset)
 	if err != nil {
 		return nil, nil, err
