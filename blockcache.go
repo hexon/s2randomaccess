@@ -29,7 +29,11 @@ func (d *decompressedBlock) deref() {
 		if d.inner.dying {
 			d.free()
 		} else {
-			globalLRU.Add(d.lruKey, d)
+			found, _ := globalLRU.ContainsOrAdd(d.lruKey, d)
+			if found {
+				// This block was already in the cache. Likely this block was requested twice at the same time. (We're not holding any lock during decompression, so this can happen.)
+				d.free()
+			}
 		}
 	}
 	d.inner.mtx.Unlock()
